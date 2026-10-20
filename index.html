@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>作业拼音卡片生成器</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    background: #f0f2f5; min-height: 100vh;
+  }
+  .top-bar {
+    background: #fff; padding: 16px 24px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    display: flex; align-items: center; justify-content: space-between;
+    position: sticky; top: 0; z-index: 100;
+  }
+  .top-bar h1 { font-size: 18px; color: #333; font-weight: 700; }
+  .top-bar .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+  .btn {
+    padding: 12px 20px; border: none; border-radius: 8px;
+    font-size: 14px; cursor: pointer; font-weight: 600;
+    transition: all 0.15s; -webkit-tap-highlight-color: transparent;
+  }
+  .btn-primary { background: #4a90d9; color: #fff; }
+  .btn-primary:hover { background: #3a7bc8; }
+  .btn-success { background: #52c41a; color: #fff; }
+  .btn-success:hover { background: #43a815; }
+  .btn:active { transform: scale(0.97); }
+
+  .main {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
+    padding: 20px; max-width: 1400px; margin: 0 auto;
+  }
+  .panel {
+    background: #fff; border-radius: 12px; padding: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  }
+  .panel-title {
+    font-size: 15px; font-weight: 700; color: #333;
+    margin-bottom: 16px; padding-bottom: 10px; border-bottom: 2px solid #f0f0f0;
+  }
+  .form-group { margin-bottom: 16px; }
+  .form-label {
+    display: block; font-size: 13px; color: #666;
+    margin-bottom: 6px; font-weight: 600;
+  }
+  .form-input, .form-textarea {
+    width: 100%; padding: 12px; border: 1px solid #e0e0e0;
+    border-radius: 8px; font-size: 16px; font-family: inherit;
+    resize: vertical; transition: border-color 0.15s;
+  }
+  .form-input:focus, .form-textarea:focus {
+    outline: none; border-color: #4a90d9;
+  }
+  .form-textarea { min-height: 80px; line-height: 1.6; }
+  .subject-block {
+    border-left: 3px solid #e0e0e0; padding-left: 14px; margin-bottom: 18px;
+  }
+  .subject-block.chinese { border-color: #4a90d9; }
+  .subject-block.math { border-color: #52c41a; }
+  .subject-block.english { border-color: #fa8c16; }
+  .subject-block-title { font-size: 14px; font-weight: 700; margin-bottom: 8px; }
+  .subject-block.chinese .subject-block-title { color: #4a90d9; }
+  .subject-block.math .subject-block-title { color: #52c41a; }
+  .subject-block.english .subject-block-title { color: #fa8c16; }
+
+  .preview-area {
+    background: #f5f7fa; border-radius: 8px; padding: 16px; min-height: 400px;
+  }
+  .preview-loading {
+    text-align: center; color: #999; padding: 60px 20px; font-size: 14px;
+  }
+
+  /* 展示视图 */
+  .view-mode { display: none; }
+  body.is-view .edit-mode { display: none; }
+  body.is-view .view-mode { display: block; }
+
+  .container { max-width: 680px; margin: 0 auto; padding: 20px 16px; }
+  .header { text-align: center; margin-bottom: 28px; }
+  .header h1 { font-size: 22px; color: #333; font-weight: 700; }
+  .header .date { font-size: 14px; color: #999; margin-top: 6px; }
+  .subject-card {
+    background: #fff; border-radius: 16px; padding: 20px;
+    margin-bottom: 18px; box-shadow: 0 2px 12px rgba(0,0,0,0.05);
+  }
+  .subject-title {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid #f0f0f0;
+  }
+  .subject-badge {
+    width: 40px; height: 40px; border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 700; color: #fff; flex-shrink: 0;
+  }
+  .subject-badge.chinese { background: #4a90d9; }
+  .subject-badge.math { background: #52c41a; }
+  .subject-badge.english { background: #fa8c16; }
+  .subject-name { font-size: 18px; font-weight: 700; color: #333; }
+  .task-list { list-style: none; }
+  .task-item {
+    display: flex; gap: 10px; align-items: flex-start;
+    padding: 16px 12px; margin: 0 -12px;
+    border-bottom: 1px dashed #f0f0f0;
+    font-size: 17px; color: #333; line-height: 2;
+    border-radius: 10px; transition: all 0.2s;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    user-select: none; -webkit-user-select: none;
+    cursor: pointer;
+  }
+  @media (hover: hover) { .task-item:hover { background: #f8f9fb; } }
+  .task-item.speaking { background: #fff7e6; }
+  .task-item:last-child { border-bottom: none; }
+
+  .task-text { flex: 1; }
+
+  /* 喇叭图标 */
+  .speak-icon {
+    flex-shrink: 0; width: 24px; height: 24px;
+    margin-top: 8px; opacity: 0.3; transition: all 0.2s;
+    cursor: pointer;
+  }
+  .task-item:active .speak-icon { opacity: 0.6; }
+  .task-item.speaking .speak-icon {
+    opacity: 1;
+    animation: pulse 1s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.15); }
+  }
+
+  /* 完成状态打勾气泡（右侧） */
+  .check-box {
+    flex-shrink: 0; width: 30px; height: 30px;
+    border-radius: 50%;
+    margin-top: 3px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.25s ease;
+    background: #f0f0f0;
+  }
+  .check-box svg {
+    width: 16px; height: 16px;
+    stroke: #bbb;
+    transition: all 0.25s ease;
+  }
+  .check-box.checked {
+    background: #52c41a;
+  }
+  .check-box.checked svg {
+    stroke: #fff;
+  }
+  .task-item.done .task-text {
+    color: #bbb; text-decoration: line-through;
+  }
+  .task-item.done rt { color: #ddd; }
+
+  .task-num {
+    flex-shrink: 0; width: 26px; height: 26px; border-radius: 50%;
+    background: #f5f7fa; color: #666; font-size: 14px; font-weight: 600;
+    display: flex; align-items: center; justify-content: center; margin-top: 5px;
+  }
+  ruby { ruby-position: above; }
+  rt {
+    font-size: 13px; color: #999;
+    font-family: "Times New Roman", serif;
+    letter-spacing: 0.5px; margin-bottom: 2px;
+  }
+  .footer-tip { text-align: center; font-size: 13px; color: #bbb; margin-top: 20px; }
+  .speak-all-bar { text-align: center; margin-bottom: 20px; }
+  .speak-all-btn {
+    background: #4a90d9; color: #fff; border: none;
+    padding: 14px 36px; border-radius: 28px; font-size: 16px;
+    cursor: pointer; box-shadow: 0 2px 8px rgba(74,144,217,0.3);
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation; min-height: 48px;
+  }
+  .speak-all-btn:active { transform: scale(0.97); }
+  .speak-all-btn.stop { background: #ff4d4f; box-shadow: 0 2px 8px rgba(255,77,79,0.3); }
+
+  .toast {
+    position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%);
+    background: rgba(0,0,0,0.8); color: #fff; padding: 12px 24px;
+    border-radius: 24px; font-size: 14px; z-index: 999;
+    opacity: 0; transition: opacity 0.3s; pointer-events: none;
+  }
+  .toast.show { opacity: 1; }
+
+  @media (max-width: 900px) {
+    .main { grid-template-columns: 1fr; }
+    .top-bar { flex-direction: column; gap: 10px; align-items: stretch; }
+    .top-bar .actions { justify-content: center; }
+  }
+  @media (max-width: 480px) {
+    .container { padding: 12px 10px; }
+    .subject-card { padding: 16px; }
+    .task-item { font-size: 16px; }
+    rt { font-size: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <h1 id="pageTitle">作业拼音卡片生成器</h1>
+  <div class="actions edit-mode">
+    <button class="btn btn-success" onclick="downloadHTML()">下载 HTML 文件</button>
+    <button class="btn btn-primary" onclick="generateLink()">生成作业链接</button>
+  </div>
+</div>
+
+<!-- 编辑器视图 -->
+<div class="main edit-mode">
+  <div class="panel">
+    <div class="panel-title">输入作业内容</div>
+    <div class="form-group">
+      <label class="form-label">日期</label>
+      <input type="text" class="form-input" id="dateInput" value="10月20日">
+    </div>
+    <div class="subject-block chinese">
+      <div class="subject-block-title">语文作业（每行一条）</div>
+      <div class="form-group">
+        <textarea class="form-textarea" id="chineseInput">拼读34页音节3遍，指读35页词语、生字、儿歌3遍
+亲子共读《和大人一起读（一）》P16-19页
+未完成订正的小朋友，明天来找老师</textarea>
+      </div>
+    </div>
+    <div class="subject-block math">
+      <div class="subject-block-title">数学作业（每行一条）</div>
+      <div class="form-group">
+        <textarea class="form-textarea" id="mathInput">读图：数学书P30说一说、P31练一练第3题，讲一讲生活中的加法小故事
+在家用物品摆一摆，练习找两部分数量，口头列出加法算式</textarea>
+      </div>
+    </div>
+    <div class="subject-block english">
+      <div class="subject-block-title">英语作业（每行一条）</div>
+      <div class="form-group">
+        <textarea class="form-textarea" id="englishInput">继续完成32、33页的涂色
+外研U学跟读</textarea>
+      </div>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="panel-title">实时预览</div>
+    <div class="preview-area" id="previewArea">
+      <div class="preview-loading">拼音库加载中...</div>
+    </div>
+  </div>
+</div>
+
+<!-- 展示视图 -->
+<div class="container view-mode" id="viewContainer"></div>
+
+<div class="toast" id="toast">链接已复制到剪贴板</div>
+
+<script src="./pinyin-pro.js"></script>
+<script>
+  // pinyin-pro UMD 加载完成后挂载到 window.pinyinPro
+  window.__pinyin = window.pinyinPro.pinyin;
+  window.__pinyinReady = true;
+  document.dispatchEvent(new Event('pinyinReady'));
+</script>
+
+<script>
+let pinyin = null;
+
+function getPinyin(ch) {
+  if (!pinyin) return null;
+  try {
+    const py = pinyin(ch, { toneType: 'symbol' });
+    return py && py !== ch ? py : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function toRuby(text) {
+  if (!text.trim()) return '';
+  let result = '';
+  for (let ch of text) {
+    if (/[a-zA-Z0-9]/.test(ch) || /[，。、；：？！""''（）《》【】\s]/.test(ch)) {
+      result += ch;
+    } else {
+      const py = getPinyin(ch);
+      result += py ? `<ruby>${ch}<rt>${py}</rt></ruby>` : ch;
+    }
+  }
+  return result;
+}
+
+function parseLines(text) {
+  return text.split('\n').map(l => l.trim()).filter(l => l);
+}
+
+function getInputData() {
+  return {
+    date: document.getElementById('dateInput').value || '',
+    chinese: parseLines(document.getElementById('chineseInput').value),
+    math: parseLines(document.getElementById('mathInput').value),
+    english: parseLines(document.getElementById('englishInput').value)
+  };
+}
+
+function renderSubjectCardPreview(badge, cls, name, lines) {
+  let items = '';
+  lines.forEach((line, i) => {
+    items += `
+      <div style="display:flex;gap:8px;padding:8px 0;border-bottom:1px dashed #f0f0f0;font-size:15px;line-height:2;">
+        <span style="flex-shrink:0;width:22px;height:22px;border-radius:50%;background:#f5f7fa;color:#666;font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center;margin-top:4px;">${i + 1}</span>
+        <span>${toRuby(line)}</span>
+      </div>
+    `;
+  });
+  return `
+    <div style="background:#fff;border-radius:12px;padding:16px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,0.04);">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid #f0f0f0;">
+        <div style="width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:#fff;background:${cls === 'chinese' ? '#4a90d9' : cls === 'math' ? '#52c41a' : '#fa8c16'};">${badge}</div>
+        <div style="font-size:16px;font-weight:700;color:#333;">${toRuby(name)}</div>
+      </div>
+      ${items}
+    </div>
+  `;
+}
+
+function renderPreview() {
+  if (!pinyin) return;
+  const data = getInputData();
+  const area = document.getElementById('previewArea');
+  let html = `
+    <div style="text-align:center;margin-bottom:20px;">
+      <h2 style="font-size:20px;color:#333;">${toRuby('课后作业')}</h2>
+      <div style="font-size:13px;color:#999;margin-top:4px;">${toRuby(data.date)}</div>
+    </div>
+  `;
+  if (data.chinese.length) html += renderSubjectCardPreview('语', 'chinese', '语文', data.chinese);
+  if (data.math.length) html += renderSubjectCardPreview('数', 'math', '数学', data.math);
+  if (data.english.length) html += renderSubjectCardPreview('英', 'english', '英语', data.english);
+  area.innerHTML = html;
+}
+
+// 每日鼓励语
+const ENCOURAGEMENTS = [
+  '宝贝今天也很棒，继续加油！',
+  '认真完成作业的你最闪亮！',
+  '每一天的努力都在悄悄变厉害！',
+  '你比昨天的自己更棒啦！',
+  '坚持写完作业，超级了不起！',
+  '每一个小进步都值得被表扬！',
+  '专心写作业的样子真好看！',
+  '加油哦，你是最棒的小学生！',
+  '今天的作业完成得真整齐！',
+  '一点点积累，变成大学问家！',
+  '写完作业就可以开心玩耍啦！',
+  '你认真的样子真可爱！',
+  '今天也是收获满满的一天！',
+  '慢慢来，你一定可以的！',
+  '你完成作业的速度越来越快啦！',
+  '读书写字的小朋友最神气！',
+  '你今天比昨天更专注了！',
+  '每完成一项就打一个勾，真棒！',
+  '知识小达人就是你！',
+  '加油宝贝，未来的小博士！',
+  '认真写完作业，奖励自己一个微笑！',
+  '你是爸爸妈妈的骄傲！',
+  '今天的作业写得真工整！',
+  '每天进步一点点，了不起！',
+  '你认真学习的样子真帅！',
+  '写完作业就可以看喜欢的书啦！',
+  '你已经连续完成作业啦，太棒了！',
+  '你的努力老师和爸爸妈妈都看到啦！',
+  '好好学习，天天向上！',
+  '今天也是充满希望的一天！'
+];
+
+function getDailyEncouragement() {
+  const now = new Date();
+  const dayOfYear = Math.floor((now - new Date(now.getFullYear(), 0, 0)) / 86400000);
+  return ENCOURAGEMENTS[dayOfYear % ENCOURAGEMENTS.length];
+}
+
+// 生成展示视图的HTML
+function renderViewHTML(data) {
+  function speakText(subjectName, idx, line) {
+    return `${subjectName}作业${idx + 1}：${line.replace(/[《》（）Pp]/g, ' ')}`;
+  }
+  function cardHTML(badge, cls, name, lines) {
+    let items = '';
+    lines.forEach((line, i) => {
+      const speakTxt = speakText(name, i, line);
+      items += `
+        <li class="task-item" data-speak="${speakTxt}" onclick="speakOne(this)">
+          <span class="task-num">${i + 1}</span>
+          <span class="task-text">${toRuby(line)}</span>
+          <svg class="speak-icon" viewBox="0 0 24 24" fill="none" stroke="#fa8c16" stroke-width="2"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+          <div class="check-box" onclick="toggleDone(this, event)">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+        </li>
+      `;
+    });
+    return `
+      <div class="subject-card">
+        <div class="subject-title">
+          <div class="subject-badge ${cls}">${badge}</div>
+          <div class="subject-name">${toRuby(name)}</div>
+        </div>
+        <ul class="task-list">${items}</ul>
+      </div>
+    `;
+  }
+  let cardsHtml = '';
+  if (data.chinese.length) cardsHtml += cardHTML('语', 'chinese', '语文', data.chinese);
+  if (data.math.length) cardsHtml += cardHTML('数', 'math', '数学', data.math);
+  if (data.english.length) cardsHtml += cardHTML('英', 'english', '英语', data.english);
+
+  return `
+    <div class="header">
+      <h1>${toRuby('课后作业')}</h1>
+      <div class="date">${toRuby(data.date)}</div>
+    </div>
+    <div class="speak-all-bar">
+      <button class="speak-all-btn" onclick="speakAll()">播放全部作业</button>
+    </div>
+    ${cardsHtml}
+    <div class="footer-tip">${toRuby(getDailyEncouragement())}</div>
+  `;
+}
+
+// 完成状态切换
+window.toggleDone = function(el, event) {
+  event.stopPropagation();
+  el.classList.toggle('checked');
+  el.closest('.task-item').classList.toggle('done');
+};
+
+// 生成分享链接
+function generateLink() {
+  const data = getInputData();
+  const json = JSON.stringify(data);
+  const encoded = btoa(unescape(encodeURIComponent(json)));
+  const url = `${location.origin}${location.pathname}#data=${encoded}`;
+  navigator.clipboard.writeText(url).then(() => {
+    showToast('链接已复制，发给家长即可打开');
+  }).catch(() => {
+    prompt('复制下面的链接：', url);
+  });
+}
+
+// 从URL hash读取数据并切换到展示模式
+function loadFromHash() {
+  const hash = location.hash;
+  if (!hash.startsWith('#data=')) return false;
+  try {
+    const encoded = hash.slice(6);
+    const json = decodeURIComponent(escape(atob(encoded)));
+    const data = JSON.parse(json);
+    // 等拼音库加载完再渲染
+    function renderWhenReady() {
+      if (!pinyin) {
+        setTimeout(renderWhenReady, 100);
+        return;
+      }
+      document.body.classList.add('is-view');
+      document.getElementById('pageTitle').textContent = '课后作业';
+      document.getElementById('viewContainer').innerHTML = renderViewHTML(data);
+      initSpeech();
+    }
+    renderWhenReady();
+    return true;
+  } catch (e) {
+    console.error('解析失败', e);
+    return false;
+  }
+}
+
+function editAgain() {
+  history.pushState(null, '', location.pathname);
+  document.body.classList.remove('is-view');
+  document.getElementById('pageTitle').textContent = '作业拼音卡片生成器';
+}
+
+function showToast(msg) {
+  const toast = document.getElementById('toast');
+  toast.textContent = msg;
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 2000);
+}
+
+// 语音功能（展示模式）
+function initSpeech() {
+  const synth = window.speechSynthesis;
+  let currentItem = null;
+  let isSpeakingAll = false;
+  let allTimer = null;
+
+  function clearSpeakingUI() {
+    document.querySelectorAll('.task-item.speaking').forEach(el => el.classList.remove('speaking'));
+    currentItem = null;
+    const btn = document.querySelector('.speak-all-btn');
+    if (btn) {
+      btn.textContent = '播放全部作业';
+      btn.classList.remove('stop');
+    }
+    isSpeakingAll = false;
+    if (allTimer) { clearTimeout(allTimer); allTimer = null; }
+  }
+
+  window.speakOne = function(itemEl) {
+    if (!synth) return;
+    const text = itemEl.dataset.speak;
+    if (currentItem === itemEl) { synth.cancel(); clearSpeakingUI(); return; }
+    synth.cancel(); clearSpeakingUI();
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.lang = 'zh-CN'; utter.rate = 0.9; utter.pitch = 1.1;
+    const voices = synth.getVoices();
+    const zhVoice = voices.find(v => v.lang.startsWith('zh-CN') || v.lang.startsWith('zh'));
+    if (zhVoice) utter.voice = zhVoice;
+    utter.onstart = () => { itemEl.classList.add('speaking'); };
+    utter.onend = () => { itemEl.classList.remove('speaking'); };
+    utter.onerror = () => { itemEl.classList.remove('speaking'); };
+    currentItem = itemEl;
+    synth.speak(utter);
+  };
+
+  window.speakAll = function() {
+    const btn = document.querySelector('.speak-all-btn');
+    if (isSpeakingAll) { synth.cancel(); clearSpeakingUI(); return; }
+    const items = document.querySelectorAll('.task-item');
+    let idx = 0;
+    isSpeakingAll = true;
+    btn.textContent = '停止播放';
+    btn.classList.add('stop');
+    function next() {
+      if (!isSpeakingAll) return;
+      if (idx >= items.length) { clearSpeakingUI(); return; }
+      const item = items[idx];
+      const text = item.dataset.speak;
+      const utter = new SpeechSynthesisUtterance(text);
+      utter.lang = 'zh-CN'; utter.rate = 0.9; utter.pitch = 1.1;
+      document.querySelectorAll('.task-item.speaking').forEach(el => el.classList.remove('speaking'));
+      item.classList.add('speaking');
+      currentItem = item;
+      utter.onend = () => { item.classList.remove('speaking'); idx++; allTimer = setTimeout(next, 300); };
+      utter.onerror = () => { item.classList.remove('speaking'); idx++; allTimer = setTimeout(next, 300); };
+      synth.speak(utter);
+    }
+    synth.cancel(); next();
+  };
+
+  if (synth.onvoiceschanged !== undefined) { synth.onvoiceschanged = () => synth.getVoices(); }
+  synth.getVoices();
+}
+
+// 下载HTML
+function downloadHTML() {
+  const data = getInputData();
+  const viewHtml = renderViewHTML(data);
+  const fullHtml = `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>课后作业 · 拼音版</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif; background: #f5f7fa; padding: 20px 16px; line-height: 1.8; }
+  .container { max-width: 680px; margin: 0 auto; }
+  .header { text-align: center; margin-bottom: 28px; }
+  .header h1 { font-size: 22px; color: #333; font-weight: 700; }
+  .header .date { font-size: 14px; color: #999; margin-top: 6px; }
+  .subject-card { background: #fff; border-radius: 16px; padding: 20px; margin-bottom: 18px; box-shadow: 0 2px 12px rgba(0,0,0,0.05); }
+  .subject-title { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid #f0f0f0; }
+  .subject-badge { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 700; color: #fff; flex-shrink: 0; }
+  .subject-badge.chinese { background: #4a90d9; }
+  .subject-badge.math { background: #52c41a; }
+  .subject-badge.english { background: #fa8c16; }
+  .subject-name { font-size: 18px; font-weight: 700; color: #333; }
+  .task-list { list-style: none; }
+  .task-item { display: flex; gap: 10px; align-items: flex-start; padding: 16px 12px; margin: 0 -12px; border-bottom: 1px dashed #f0f0f0; font-size: 17px; color: #333; line-height: 2; border-radius: 10px; transition: all 0.2s; -webkit-tap-highlight-color: transparent; touch-action: manipulation; user-select: none; -webkit-user-select: none; cursor: pointer; }
+  @media (hover: hover) { .task-item:hover { background: #f8f9fb; } }
+  .task-item.speaking { background: #fff7e6; }
+  .task-item:last-child { border-bottom: none; }
+  .task-text { flex: 1; }
+  .speak-icon { flex-shrink: 0; width: 24px; height: 24px; margin-top: 8px; opacity: 0.3; transition: all 0.2s; cursor: pointer; }
+  .task-item:active .speak-icon { opacity: 0.6; }
+  .task-item.speaking .speak-icon { opacity: 1; animation: pulse 1s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.15); } }
+  .check-box { flex-shrink: 0; width: 30px; height: 30px; border-radius: 50%; margin-top: 3px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.25s ease; background: #f0f0f0; }
+  .check-box svg { width: 16px; height: 16px; stroke: #bbb; transition: all 0.25s ease; }
+  .check-box.checked { background: #52c41a; }
+  .check-box.checked svg { stroke: #fff; }
+  .task-item.done .task-text { color: #bbb; text-decoration: line-through; }
+  .task-item.done rt { color: #ddd; }
+  .task-num { flex-shrink: 0; width: 26px; height: 26px; border-radius: 50%; background: #f5f7fa; color: #666; font-size: 14px; font-weight: 600; display: flex; align-items: center; justify-content: center; margin-top: 5px; }
+  ruby { ruby-position: above; }
+  rt { font-size: 13px; color: #999; font-family: "Times New Roman", serif; letter-spacing: 0.5px; margin-bottom: 2px; }
+  .footer-tip { text-align: center; font-size: 13px; color: #bbb; margin-top: 20px; }
+  .speak-all-bar { text-align: center; margin-bottom: 20px; }
+  .speak-all-btn { background: #4a90d9; color: #fff; border: none; padding: 14px 36px; border-radius: 28px; font-size: 16px; cursor: pointer; box-shadow: 0 2px 8px rgba(74,144,217,0.3); -webkit-tap-highlight-color: transparent; touch-action: manipulation; min-height: 48px; }
+  .speak-all-btn:active { transform: scale(0.97); }
+  .speak-all-btn.stop { background: #ff4d4f; box-shadow: 0 2px 8px rgba(255,77,79,0.3); }
+  @media (max-width: 480px) { body { padding: 12px 10px; } .subject-card { padding: 16px; } .task-item { font-size: 16px; } rt { font-size: 12px; } }
+</style>
+</head>
+<body>
+<div class="container">${viewHtml}</div>
+<script>
+  const synth = window.speechSynthesis;
+  let currentItem = null; let isSpeakingAll = false; let allTimer = null;
+  function clearSpeakingUI() {
+    document.querySelectorAll('.task-item.speaking').forEach(el => el.classList.remove('speaking'));
+    currentItem = null;
+    const btn = document.querySelector('.speak-all-btn');
+    btn.textContent = '播放全部作业'; btn.classList.remove('stop');
+    isSpeakingAll = false; if (allTimer) { clearTimeout(allTimer); allTimer = null; }
+  }
+  function speakOne(itemEl) {
+    if (!synth) return;
+    const text = itemEl.dataset.speak;
+    if (currentItem === itemEl) { synth.cancel(); clearSpeakingUI(); return; }
+    synth.cancel(); clearSpeakingUI();
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.lang = 'zh-CN'; utter.rate = 0.9; utter.pitch = 1.1;
+    const voices = synth.getVoices();
+    const zhVoice = voices.find(v => v.lang.startsWith('zh-CN') || v.lang.startsWith('zh'));
+    if (zhVoice) utter.voice = zhVoice;
+    utter.onstart = () => { itemEl.classList.add('speaking'); };
+    utter.onend = () => { itemEl.classList.remove('speaking'); };
+    utter.onerror = () => { itemEl.classList.remove('speaking'); };
+    currentItem = itemEl; synth.speak(utter);
+  }
+  function toggleDone(el, event) {
+    event.stopPropagation();
+    el.classList.toggle('checked');
+    el.closest('.task-item').classList.toggle('done');
+  }
+  function speakAll() {
+    const btn = document.querySelector('.speak-all-btn');
+    if (isSpeakingAll) { synth.cancel(); clearSpeakingUI(); return; }
+    const items = document.querySelectorAll('.task-item'); let idx = 0;
+    isSpeakingAll = true; btn.textContent = '停止播放'; btn.classList.add('stop');
+    function next() {
+      if (!isSpeakingAll) return;
+      if (idx >= items.length) { clearSpeakingUI(); return; }
+      const item = items[idx]; const text = item.dataset.speak;
+      const utter = new SpeechSynthesisUtterance(text);
+      utter.lang = 'zh-CN'; utter.rate = 0.9; utter.pitch = 1.1;
+      document.querySelectorAll('.task-item.speaking').forEach(el => el.classList.remove('speaking'));
+      item.classList.add('speaking'); currentItem = item;
+      utter.onend = () => { item.classList.remove('speaking'); idx++; allTimer = setTimeout(next, 300); };
+      utter.onerror = () => { item.classList.remove('speaking'); idx++; allTimer = setTimeout(next, 300); };
+      synth.speak(utter);
+    }
+    synth.cancel(); next();
+  }
+  if (synth.onvoiceschanged !== undefined) { synth.onvoiceschanged = () => synth.getVoices(); }
+  synth.getVoices();
+<\/script>
+</body>
+</html>`;
+  const blob = new Blob([fullHtml], { type: 'text/html; charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `课后作业_${data.date}.html`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// 初始化
+document.querySelectorAll('.form-input, .form-textarea').forEach(el => {
+  el.addEventListener('input', () => { if (pinyin) renderPreview(); });
+});
+
+// 等拼音库加载完成
+function waitForPinyin() {
+  if (window.__pinyinReady) {
+    pinyin = window.__pinyin;
+    renderPreview();
+    loadFromHash();
+  } else {
+    setTimeout(waitForPinyin, 100);
+  }
+}
+waitForPinyin();
+</script>
+
+</body>
+</html>
